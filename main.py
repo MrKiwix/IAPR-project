@@ -67,11 +67,14 @@ if __name__ == "__main__":
             images = images.to(device, non_blocking=True)
             
             # Add the predictions to the list, cpu() is needed to get it back to the host memory
-            predictions.extend(torch.round(model(images)).int().cpu().numpy())
+            rounded = torch.round(model(images)).int().cpu().numpy()
+            # we also want only positive predictions, so we set the negative ones to 0
+            rounded[rounded < 0] = 0
+            predictions.extend(rounded)
             ids.extend(image_ids)
     
     # Insert in the dataframe       
-    submission_df["ID"] = ids
+    submission_df["id"] = ids
     submission_df[CLASS_NAMES] = predictions
     
     # export as csv
