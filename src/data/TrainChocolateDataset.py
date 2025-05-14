@@ -33,7 +33,7 @@ class ChocolateDataset(Dataset):
         
         # In case the index is a tensor, we convert it to a list
         if torch.is_tensor(idx):
-            idx = idx.tolist
+            idx = idx.tolist()
 
         # Reconstruct the image path with the image ID (/!\ L prefix)
         img_path = Path(f"{self.data_dir}/L{self.label_df.iloc[idx, 0]}.JPG")
