@@ -1,4 +1,9 @@
+!data/
 data/*
+!data/alpha_references
+!data/references
+!data/backgrounds
+!data/train.csv
 
 *.pt
 
