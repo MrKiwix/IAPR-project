@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 import csv
 from PIL import Image, ImageFilter, ImageDraw
-from torchvision import functional
+from torchvision.transforms import functional
 from tqdm import tqdm  # for progress bar
 import numpy as np
 
@@ -23,6 +23,8 @@ def clear_output_dir(output_dir):
                     os.remove(file_path)
             except Exception as e:
                 print(f"Error deleting file {file_path}: {e}")
+    
+    print(f"All images in {output_dir} have been deleted.")
 
 
 def resize_training_images(target_size, image_directories, output_dir):
@@ -52,7 +54,10 @@ def resize_training_images(target_size, image_directories, output_dir):
         for img_name in tqdm(img_names):
             img = Image.open(img_name).convert("RGB")
             img = img.resize(target_size, Image.LANCZOS)
-            img_file_name = "L" + img_name.stem + img_name.suffix
+            img_file_name = img_name.stem + img_name.suffix
+            # if the file name doesn't start with L, we add it
+            if not img_file_name.startswith("L"):
+                img_file_name = "L" + img_file_name
             img.save(resized_output_path / img_file_name)    
     
     print(f"DONE! Resized images saved in {resized_output_path}.")
@@ -93,9 +98,9 @@ def flip_images(initial_csv, image_dir_path, output_csv_path):
             img_hv = functional.hflip(img_v)
             
             # save the images with the new names
-            img_h.save(base_folder / ("L" + file_name[:-4] + "_h.JPG"))
-            img_v.save(base_folder / ("L" + file_name[:-4] + "_v.JPG"))
-            img_hv.save(base_folder / ("L" + file_name[:-4] + "_hv.JPG"))
+            img_h.save(base_folder / (file_name[:-4] + "_h.JPG"))
+            img_v.save(base_folder / (file_name[:-4] + "_v.JPG"))
+            img_hv.save(base_folder / (file_name[:-4] + "_hv.JPG"))
             
             # add the new rows to the new csv file, the label is kept
             new_rows.append([file_name[:-4] + "_h"] + label)
@@ -136,7 +141,7 @@ def generate_synthetic_image(background, transparent_reference_path, image_size,
     Args:
         background (Image): PIL image object representing the background.
         transparent_reference_path (str): Path to the directory containing the chocolate images with transparency.
-        image_size (tuple): Size of the generated image (width, height). Needed for the resizing of the reference chocolate and the exported image
+        image_size (tuple): Size of the generated image (width, height). Needed for the resizing of the reference chocolate
         noise (bool, optional): If True, applies noise to the chocolates. Defaults to True.
 
     Returns:
@@ -164,7 +169,12 @@ def generate_synthetic_image(background, transparent_reference_path, image_size,
     for choco_path in chocolates_paths:
         # Open and resize the image
         img = Image.open(choco_path).convert("RGBA")
-        img = img.resize(image_size, Image.LANCZOS)    
+        # Now, we need to compute a scale factor since the chocolate where extracted from the original image that was 6000x4000px
+        # The original chocolate size (alpha version) is 1200x800px
+        x_ratio = image_size[0] / 6000
+        y_ratio = image_size[1] / 4000
+        new_size = (int(img.size[0] * x_ratio), int(img.size[1] * y_ratio))
+        img = img.resize(new_size, Image.LANCZOS)
         # Apply noise if needed
         if noise:
             img = apply_noise(img, probability=0.6)    
@@ -196,7 +206,7 @@ def generate_synthetic_image(background, transparent_reference_path, image_size,
             if np.random.rand() < 0.5:
                 candidate = candidate.transpose(Image.FLIP_TOP_BOTTOM)
             choco_w, choco_h = candidate.size
-            
+                        
             # Get x and y for the left top corner of the chocolate
             x = np.random.randint(0, bg_w - choco_w)
             y = np.random.randint(0, bg_h - choco_h)
@@ -252,7 +262,7 @@ def generate_synthetic_dataset(num_images, backgrounds_path, transparent_referen
     num_backgrounds = len(backgrounds)
     # we split the number of images by the number of backgrounds
     num_images_per_background = num_images // num_backgrounds
-    rest += num_images % num_backgrounds # for the last background
+    rest = num_images % num_backgrounds # for the last background
 
     # create the csv file
     with open(output_csv_path, "w", newline="") as csvfile:
@@ -289,4 +299,40 @@ def generate_synthetic_dataset(num_images, backgrounds_path, transparent_referen
                 # write the label
                 writer.writerow([file_name] + list(label.values()))
     
+
+def merge_csv_files(input_csv1, input_csv2, output_csv):
+    """Merges two CSV files into one. The first file is the one with the synthetic images, the second one is the one with the original images.
+    The function assumes that the first column of both files is the image name and that the rest of the columns are the labels.
+
+    Args:
+        input_csv1 (str): Path to the first CSV file.
+        input_csv2 (str): Path to the second CSV file.
+        output_csv (str): Path to the output CSV file.
+    """
     
+    # Open both CSV files
+    with open(input_csv1, "r") as csvfile1, open(input_csv2, "r") as csvfile2:
+        
+        reader1 = csv.reader(csvfile1)
+        reader2 = csv.reader(csvfile2)
+        
+        # Read header and data
+        header1 = next(reader1)
+        header2 = next(reader2)
+        
+        rows1 = list(reader1)
+        rows2 = list(reader2)
+        
+        # The header is the same for bot file, so we can just take the first one
+        merged_header = header1
+        
+        # Merge rows
+        merged_rows = rows1 + rows2
+        
+    # Write merged data to a new CSV file
+    with open(output_csv, "w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(merged_header)
+        writer.writerows(merged_rows)
+        
+    print(f"Merged CSV files saved to {output_csv}.")
