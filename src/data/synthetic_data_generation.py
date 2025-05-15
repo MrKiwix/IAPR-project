@@ -103,6 +103,10 @@ def flip_images(initial_csv, image_dir_path, output_csv_path):
             img_hv.save(base_folder / (file_name[:-4] + "_hv.JPG"))
             
             # add the new rows to the new csv file, the label is kept
+            # if the file name starts with L, we remove it
+            if file_name.startswith("L"):
+                file_name = file_name[1:]
+            # add the new rows to the new csv file
             new_rows.append([file_name[:-4] + "_h"] + label)
             new_rows.append([file_name[:-4] + "_v"] + label)    
             new_rows.append([file_name[:-4] + "_hv"] + label)
