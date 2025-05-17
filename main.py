@@ -9,6 +9,7 @@ import pandas as pd
 from pathlib import Path
 from tqdm import tqdm # for progress bar
 import time
+import torch.nn.functional as F
 
 # Internal modules
 from src.helper import *
@@ -66,11 +67,13 @@ if __name__ == "__main__":
         for images, image_ids in tqdm(test_loader, desc="Processing test images", unit="batch"):
             images = images.to(device, non_blocking=True)
             
+            preds = model(images)
+            
             # Add the predictions to the list, cpu() is needed to get it back to the host memory
-            rounded = torch.round(model(images)).int().cpu().numpy()
+            hard   = torch.round(F.relu(preds)).int().cpu().numpy()
             # we also want only positive predictions, so we set the negative ones to 0
-            rounded[rounded < 0] = 0
-            predictions.extend(rounded)
+            hard[hard < 0] = 0
+            predictions.extend(hard)
             ids.extend(image_ids)
     
     # Insert in the dataframe       
