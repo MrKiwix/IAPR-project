@@ -42,17 +42,7 @@ def get_optimizer(model, weight_decay=1e-4):
         weight_decay=weight_decay,
     )
     
-def get_loss(beta=1.0):
-    """
-    This function returns the loss function for the model.
 
-    Args:
-        beta (float, optional): the beta parameter for the smooth L1 loss. Defaults to 1.0.
-    Returns:    
-        torch.nn.Module: The loss function for the model.
-    """    
-    
-    return nn.SmoothL1Loss(beta=beta)
     
 ###########################
 # Training and Eval Epochs
@@ -101,3 +91,42 @@ def eval_epoch(loader, model, loss_fn, num_classes, device):
     mae = (mae_sum / len(loader.dataset)).cpu()   # per-class MAE
 
     return avg_loss, mae
+
+
+class ChocolateCountF1Loss(nn.Module):
+    """
+    Custom loss function to match the one used in the competition.
+    """
+    
+    def __init__(self, smooth=1e-10):
+        super(ChocolateCountF1Loss, self).__init__()
+        self.smooth = smooth  # Smoothing factor to avoid division by zero
+        
+    def forward(self, predictions, targets):
+        """
+        Args:
+            predictions: Predicted counts of chocolate pieces, shape [N, C]
+            targets: Ground truth counts, shape [N, C]
+        Returns:
+            loss: 1 - F1 score (since we want to minimize loss)
+        """
+        
+        # set all the prediction to positive values, -> <0 becomes 0
+        predictions = torch.clamp(predictions, min=0)
+        # round the predictions to the nearest integer
+        predictions = torch.round(predictions)
+        
+        # Calculate TP for each image (sum of min between prediction and target for each class)
+        tp = torch.sum(torch.min(predictions, targets), dim=1)
+        
+        # Calculate FPN for each image (sum of absolute difference between prediction and target)
+        fpn = torch.sum(torch.abs(predictions - targets), dim=1)
+        
+        # Calculate F1 score per image
+        f1_per_image = (2 * tp + self.smooth) / (2 * tp + fpn + self.smooth)
+        
+        # Calculate mean F1 score across all images
+        mean_f1 = torch.mean(f1_per_image)
+        
+        # Return 1 - F1 as loss (to minimize)
+        return 1.0 - mean_f1
