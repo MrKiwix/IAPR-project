@@ -77,20 +77,35 @@ def eval_epoch(loader, model, loss_fn, num_classes, device):
     
     total_loss = 0.0
     mae_sum = torch.zeros(num_classes, device=device)
+    f1_sum = 0.0
 
     for imgs, targets in loader:
+        
+        # Soft validation -> no clamping and no rounding
         imgs    = imgs.to(device, non_blocking=True)
         targets = targets.float().to(device, non_blocking=True)
-
         preds = model(imgs)
         total_loss += loss_fn(preds, targets).item() * imgs.size(0)
 
-        mae_sum += (preds - targets).abs().sum(dim=0)
+        # Hard validation -> clamping and rounding
+        hard = torch.round(torch.nn.functional.relu(preds))
+        # Compute per-image TP and FPN
+        tp_per_image  = torch.min(hard, targets).sum(dim=1)         # shape: [batch]
+        fpn_per_image = torch.abs(hard - targets).sum(dim=1)        # shape: [batch]
 
+        # Compute per-image F1, then sum them
+        f1_per_image = (2*tp_per_image + loss_fn.smooth) \
+                    / (2*tp_per_image + fpn_per_image + loss_fn.smooth)
+        f1_sum += f1_per_image.sum().item()
+        
+        mae_sum += (hard - targets.to(device)).abs().sum(dim=0)
+        
+        
     avg_loss = total_loss / len(loader.dataset)
+    avg_f1 = f1_sum / len(loader.dataset)  # per-class F1 score
     mae = (mae_sum / len(loader.dataset)).cpu()   # per-class MAE
 
-    return avg_loss, mae
+    return avg_loss, avg_f1,mae
 
 
 class ChocolateCountF1Loss(nn.Module):
@@ -111,22 +126,16 @@ class ChocolateCountF1Loss(nn.Module):
             loss: 1 - F1 score (since we want to minimize loss)
         """
         
-        # set all the prediction to positive values, -> <0 becomes 0
-        predictions = torch.clamp(predictions, min=0)
-        # round the predictions to the nearest integer
-        predictions = torch.round(predictions)
+        # We cannot clamp and round here, because it's not differentiable
+        predictions = torch.nn.functional.relu(predictions) # It's a softclamp for non-negativity
         
         # Calculate TP for each image (sum of min between prediction and target for each class)
-        tp = torch.sum(torch.min(predictions, targets), dim=1)
-        
+        tp  = torch.sum(torch.min(predictions, targets), dim=1)        
         # Calculate FPN for each image (sum of absolute difference between prediction and target)
         fpn = torch.sum(torch.abs(predictions - targets), dim=1)
         
         # Calculate F1 score per image
-        f1_per_image = (2 * tp + self.smooth) / (2 * tp + fpn + self.smooth)
-        
-        # Calculate mean F1 score across all images
-        mean_f1 = torch.mean(f1_per_image)
+        f1 = (2 * tp + self.smooth) / (2 * tp + fpn + self.smooth)
         
         # Return 1 - F1 as loss (to minimize)
-        return 1.0 - mean_f1
+        return 1.0 - f1.mean()
