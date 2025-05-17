@@ -105,7 +105,7 @@ def eval_epoch(loader, model, loss_fn, num_classes, device):
     avg_f1 = f1_sum / len(loader.dataset)  # per-class F1 score
     mae = (mae_sum / len(loader.dataset)).cpu()   # per-class MAE
 
-    return avg_loss, avg_f1,mae
+    return avg_loss, avg_f1, mae
 
 
 class ChocolateCountF1Loss(nn.Module):
