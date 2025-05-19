@@ -12,13 +12,14 @@ class SyntheticChocolateDataset(Dataset):
     Pytorch Dataset for the Chocolate validation dataset
     """    
     
-    def __init__(self, background_dir, alpha_reference_dir, original_label_csv, per_background = 3, transform=None, target_transform=None):
+    def __init__(self, background_dir, alpha_reference_dir, original_label_csv, train_idx, per_background = 2, transform=None, target_transform=None):
         """
         Args:
             background_dir (str): Path to the directory containing all the background images
             alpha_reference_dir (str): Path to the directory containing all the alpha reference images
             original_label_csv (str): Path to the CSV file containing the origin labels
-            per_background (int): Number of images to generate per background. Defaults to 3.
+            train_idx (list): List of indices to use for training (so we don't use the one of the validation set)
+            per_background (int): Number of images to generate per background. Defaults to 2.
             transform (callable, optional):  Transformation or sequence of transformation to apply to the input images. Defaults to None.
             target_transform (callable, optional):  Transformation or sequence of transformation to apply to the target labels. Defaults to None.
         """        
@@ -30,7 +31,8 @@ class SyntheticChocolateDataset(Dataset):
         self.transform = transform
         self.target_transform = target_transform
         self.per_background = per_background
-        self.df_size = len(self.label_df)
+        self.train_idx = train_idx
+        self.df_size = len(self.train_idx)
 
     def __len__(self):
         return self.per_background * self.df_size
@@ -40,6 +42,9 @@ class SyntheticChocolateDataset(Dataset):
         # In case the index is a tensor, we convert it to a list
         if torch.is_tensor(idx):
             idx = idx.tolist()
+            
+        # We need to convert idx to the original index in the dataframe
+        idx = self.train_idx[idx // self.per_background]
 
         # Reconstruct the image path with the image ID (/!\ L prefix)
         background_path = Path(f"{self.background_dir}/L{self.label_df.iloc[idx % self.df_size, 0]}.JPG") # we loop over the dataset

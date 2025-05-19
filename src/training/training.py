@@ -93,12 +93,13 @@ def eval_epoch(loader, model, loss_fn, num_classes, device):
         tp_per_image  = torch.min(hard, targets).sum(dim=1)         # shape: [batch]
         fpn_per_image = torch.abs(hard - targets).sum(dim=1)        # shape: [batch]
 
+        smooth=1e-10
         # Compute per-image F1, then sum them
-        f1_per_image = (2*tp_per_image + loss_fn.smooth) \
-                    / (2*tp_per_image + fpn_per_image + loss_fn.smooth)
+        f1_per_image = (2*tp_per_image + smooth) \
+                    / (2*tp_per_image + fpn_per_image + smooth)
         f1_sum += f1_per_image.sum().item()
         
-        mae_sum += (hard - targets.to(device)).abs().sum(dim=0)
+        mae_sum += (preds - targets).abs().sum(dim=0)
         
         
     avg_loss = total_loss / len(loader.dataset)
