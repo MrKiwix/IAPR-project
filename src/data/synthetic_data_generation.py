@@ -175,10 +175,10 @@ def generate_synthetic_image(background, transparent_reference_path, image_size,
         img = Image.open(choco_path).convert("RGBA")
         # Now, we need to compute a scale factor since the chocolate where extracted from the original image that was 6000x4000px
         # The original chocolate size (alpha version) is 1200x800px
-        x_ratio = image_size[0] / 6000
+        """         x_ratio = image_size[0] / 6000
         y_ratio = image_size[1] / 4000
-        new_size = (int(img.size[0] * x_ratio), int(img.size[1] * y_ratio))
-        img = img.resize(new_size, Image.LANCZOS)
+        new_size = (int(img.size[0] * x_ratio), int(img.size[1] * y_ratio)) """
+        # img = img.resize(new_size, Image.LANCZOS)
         # Apply noise if needed
         if noise:
             img = apply_noise(img, probability=0.6)    
