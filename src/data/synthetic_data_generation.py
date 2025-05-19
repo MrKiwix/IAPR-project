@@ -265,6 +265,7 @@ def generate_synthetic_dataset(num_images, backgrounds_path, transparent_referen
     # get the pictures in the background folder
     backgrounds = sorted(backgrounds_path.glob("*.JPG"))
     num_backgrounds = len(backgrounds)
+    print(num_backgrounds)
     # we split the number of images by the number of backgrounds
     num_images_per_background = num_images // num_backgrounds
     rest = num_images % num_backgrounds # for the last background
@@ -284,7 +285,7 @@ def generate_synthetic_dataset(num_images, backgrounds_path, transparent_referen
         writer.writerow(header)
         
         for i, background_path in enumerate(backgrounds):
-            print("Generating images for background ", i+1, " of ", num_backgrounds)
+            print("Generating images for background ", i+1, " of ", num_backgrounds, end="", flush=True)
             
             # load + resize the background image
             background = Image.open(background_path).convert("RGB")
@@ -321,7 +322,7 @@ def generate_synthetic_dataset(num_images, backgrounds_path, transparent_referen
                 old_label ={header[i]: 0 for i in range(1, len(header))}
                     
             # generate the images for this background
-            for j in tqdm(range(n_image)):
+            for j in tqdm(range(n_image), leave=False):
                 
                 # We need to add the two labels together, so we need to create a new dictionary
                 

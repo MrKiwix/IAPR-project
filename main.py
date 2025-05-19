@@ -67,7 +67,7 @@ if __name__ == "__main__":
             images = images.to(device, non_blocking=True)
             
             # Add the predictions to the list, cpu() is needed to get it back to the host memory
-            rounded = torch.round(model(images)).int().cpu().numpy()
+            rounded = model(images).cpu().numpy()
             # we also want only positive predictions, so we set the negative ones to 0
             rounded[rounded < 0] = 0
             predictions.extend(rounded)
