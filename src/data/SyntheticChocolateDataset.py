@@ -1,76 +1,135 @@
-# Dataset class for the Chocolate validation dataset
-
-from torch.utils.data import Dataset
-import pandas as pd
-from pathlib import Path
 import torch
-from src.data.synthetic_data_generation import generate_synthetic_image
-from PIL import Image
+from torch.utils.data import Dataset
+from pathlib import Path
+from PIL import Image, ImageOps
+import numpy as np
+import pandas as pd
 
 class SyntheticChocolateDataset(Dataset):
     """
-    Pytorch Dataset for the Chocolate validation dataset
-    """    
-    
-    def __init__(self, background_dir, alpha_reference_dir, original_label_csv, train_idx, per_background = 2, transform=None, target_transform=None):
-        """
-        Args:
-            background_dir (str): Path to the directory containing all the background images
-            alpha_reference_dir (str): Path to the directory containing all the alpha reference images
-            original_label_csv (str): Path to the CSV file containing the origin labels
-            train_idx (list): List of indices to use for training (so we don't use the one of the validation set)
-            per_background (int): Number of images to generate per background. Defaults to 2.
-            transform (callable, optional):  Transformation or sequence of transformation to apply to the input images. Defaults to None.
-            target_transform (callable, optional):  Transformation or sequence of transformation to apply to the target labels. Defaults to None.
-        """        
-        
+    Much faster PyTorch Dataset for generating synthetic choc images:
+      - preloads/resizes all reference PNGs once
+      - caches background paths & labels in plain NumPy/torch
+      - minimal pandas use (only in __init__)
+    """
+    def __init__(
+        self,
+        background_dir: str,
+        alpha_reference_dir: str,
+        original_label_csv: str,
+        train_idx: list,
+        per_background: int = 2,
+        transform=None,
+        target_transform=None,
+    ):
         super().__init__()
-        self.background_dir = background_dir
-        self.label_df = pd.read_csv(original_label_csv)
-        self.reference_dir = alpha_reference_dir
+        bg_dir = Path(background_dir)
+        self.per_background = per_background
         self.transform = transform
         self.target_transform = target_transform
-        self.per_background = per_background
-        self.train_idx = train_idx
-        self.df_size = len(self.train_idx)
+
+        # 1) Load label DataFrame ONCE
+        df = pd.read_csv(original_label_csv)
+        # extract only the rows we’ll use, and the numeric labels (drop ID col)
+        df_train = df.iloc[train_idx].reset_index(drop=True)
+        self.labels = df_train.iloc[:, 1:].to_numpy(dtype=np.int32)
+
+        # 2) Cache list of background image paths (matching L<ID>.JPG)
+        self.bg_paths = [
+            bg_dir / f"L{int(r[0])}.JPG"
+            for r in df_train.itertuples(index=False, name=None)
+        ]
+
+        # 3) Preload + resize all reference chocolate PNGs
+        ref_dir = Path(alpha_reference_dir)
+        self.choco_keys = [
+            "Jelly White", "Jelly Milk", "Jelly Black", "Amandina",
+            "Crème brulée", "Triangolo", "Tentation noir", "Comtesse",
+            "Noblesse", "Noir authentique", "Passion au lait",
+            "Arabia", "Stracciatella"
+        ]
+
+        self.base_chocolates = []
+        for name in self.choco_keys:
+            fn = (
+                name.lower()
+                    .replace(" ", "_")
+                    .replace("-", "_")
+                    .replace("é", "e")
+                    .replace("è", "e")
+                    .replace("'", "_")
+                + ".png"
+            )
+            img = Image.open(ref_dir / fn).convert("RGBA")
+            # resize *once* to the target dataset image size:
+            # assume all backgrounds share same size → inspect first
+            target_size = Image.open(self.bg_paths[0]).size
+            img = img.resize(target_size, Image.LANCZOS)
+            self.base_chocolates.append(img)
+
+        # Precompute Dataset length
+        self.dataset_len = len(self.bg_paths) * self.per_background
 
     def __len__(self):
-        return self.per_background * self.df_size
+        return self.dataset_len
 
     def __getitem__(self, idx):
-        
-        # In case the index is a tensor, we convert it to a list
-        if torch.is_tensor(idx):
-            idx = idx.tolist()
-            
-        # We need to convert idx to the original index in the dataframe
-        idx = self.train_idx[idx // self.per_background]
+        # map linear idx → which background, which repeat
+        bg_idx = (idx // self.per_background)
+        label = self.labels[bg_idx].copy()  # shape = (n_choc_types,)
 
-        # Reconstruct the image path with the image ID (/!\ L prefix)
-        background_path = Path(f"{self.background_dir}/L{self.label_df.iloc[idx % self.df_size, 0]}.JPG") # we loop over the dataset
+        # 1) load bg once per sample
+        bg = Image.open(self.bg_paths[bg_idx]).convert("RGBA")
+        bg_w, bg_h = bg.size
 
-        # Open the image using PIL for RGBA utilities
-        bg = Image.open(background_path).convert("RGBA")
-        original_label = self.label_df.iloc[idx % self.df_size, 1:].astype(int) # Skip the image ID
+        # 2) prepare a mask for collision‐checking
+        mask = np.zeros((bg_h, bg_w), dtype=np.uint8)
 
-        # Now, we want to generate the synthetic image
-        synth, new_label = generate_synthetic_image(bg, self.reference_dir, bg.size, False)
-        
-        # We then need to merge the two labels
-        new_label = new_label.values() # it's a dict so we get the values
-        new_label = pd.Series(new_label, index=self.label_df.columns[1:])
-        new_label = new_label.astype(int)
-        
-        # Merge the two labels
-        new_label = original_label + new_label
-        
-        # Apply the transformations if needed
+        # 3) paste a few chocolates
+        counts = np.zeros(len(self.base_chocolates), dtype=np.int32)
+        n_to_paste = np.random.randint(1, 4)
+        for _ in range(n_to_paste):
+            i = np.random.randint(len(self.base_chocolates))
+            base = self.base_chocolates[i]
+
+            # apply random flip/rotate *in-memory only*
+            ch = base
+            if torch.rand(1).item() < 0.5:
+                ch = ImageOps.mirror(ch)
+            if torch.rand(1).item() < 0.5:
+                ch = ImageOps.flip(ch)
+            angle = int(torch.randint(0, 360, (1,)).item())
+            ch = ch.rotate(angle, expand=False)
+
+            # brute‐force random spot until it fits
+            ch_w, ch_h = ch.size
+            alpha = np.array(ch.split()[-1])
+            placed = False
+            for _ in range(100):  # cap attempts
+                x = np.random.randint(0, bg_w - ch_w + 1)
+                y = np.random.randint(0, bg_h - ch_h + 1)
+                region = mask[y: y + ch_h, x: x + ch_w]
+                if not np.any((alpha > 0) & (region > 0)):
+                    # safe to paste
+                    mask[y: y + ch_h, x: x + ch_w] = np.maximum(region, alpha)
+                    bg.paste(ch, (x, y), ch)
+                    counts[i] += 1
+                    placed = True
+                    break
+            # if no spot found in 100 tries, skip
+
+        # 4) convert bg → RGB, combine original & new counts
+        synth = bg.convert("RGB")
+        label += counts
+
+        # 5) transforms
         if self.transform:
             synth = self.transform(synth)
         if self.target_transform:
-            new_label = self.target_transform(new_label)
+            label = self.target_transform(label)
 
-        return synth, new_label
+        return synth, torch.from_numpy(label).int()
+
 
 class LabelToTensor:
     """
