@@ -1,4 +1,4 @@
-# Dataset class for the Chocolate training dataset (+ evaluation)
+# Dataset class for the Chocolate training dataset
 
 from torch.utils.data import Dataset
 import pandas as pd
@@ -14,7 +14,7 @@ class ChocolateDataset(Dataset):
     def __init__(self, data_dir, label_csv, transform=None, target_transform=None):
         """
         Args:
-            data_dir (str): Path to the directory containing all the training images
+            data_dir (str): Path to the directory containing the validation images
             label_csv (str): Path to the csv file containing the labels and image IDs
             transform (torchvision.transforms, optional): Transformation or sequence of transformation to apply to the input images. Defaults to None.
             target_transform (torchvision.transforms, optional): Transformation or sequence of transformation to apply to the labels. Defaults to None.
