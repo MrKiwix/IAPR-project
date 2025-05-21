@@ -111,12 +111,16 @@ def eval_epoch(loader, model, loss_fn, num_classes, device):
 
 class ChocolateCountF1Loss(nn.Module):
     """
-    Custom loss function to match the one used in the competition.
+    Custom loss function to match the one used in the kgalle leader Board. It's the F1, but we do a 1-F1 to use it as a loss.
     """
     
     def __init__(self, smooth=1e-10):
+        """
+        Args:
+            smooth (float): Smoothing factor to avoid division by zero. Defaults to 1e-10.
+        """        
         super(ChocolateCountF1Loss, self).__init__()
-        self.smooth = smooth  # Smoothing factor to avoid division by zero
+        self.smooth = smooth  
         
     def forward(self, predictions, targets):
         """
@@ -128,15 +132,15 @@ class ChocolateCountF1Loss(nn.Module):
         """
         
         # We cannot clamp and round here, because it's not differentiable
-        predictions = torch.nn.functional.relu(predictions) # It's a softclamp for non-negativity
+        predictions = torch.nn.functional.relu(predictions) # It's a softclamp for non-negativity -> c'est max(0, x)
         
-        # Calculate TP for each image (sum of min between prediction and target for each class)
+        # Calculate TP for each image 
         tp  = torch.sum(torch.min(predictions, targets), dim=1)        
-        # Calculate FPN for each image (sum of absolute difference between prediction and target)
+        # Calculate FPN for each image 
         fpn = torch.sum(torch.abs(predictions - targets), dim=1)
         
         # Calculate F1 score per image
         f1 = (2 * tp + self.smooth) / (2 * tp + fpn + self.smooth)
         
-        # Return 1 - F1 as loss (to minimize)
+        # Return 1 - F1 as a loss that we can minimize
         return 1.0 - f1.mean()

@@ -15,10 +15,22 @@ class SyntheticChocolateDataset(Dataset):
         synth_dir: str,
         original_label_csv: str,
         train_idx, # tensor of indices
-        per_background: int = 2,
+        per_background: int = 5,
         transform=None,
         target_transform=None,
     ):
+        """
+        Args:
+            background_dir (str): Path to the directory containing the background images
+            alpha_reference_dir (str): Path to the directory containing the alpha reference images
+            synth_dir (str): Path to the directory where the synthetic images will be saved
+            original_label_csv (str): Path to the csv file containing the labels and image IDs of the training set (splitted from the validation set)
+            train_idx (torch.Tensor): Tensor of indices for the training set
+            per_background (int): Number of synthetic images to generate per background image. Defaults to 5.
+            transform (torchvision.transforms, optional): Transformation or sequence of transformation to apply to the input images. Defaults to None.
+            target_transform (torchvision.transforms, optional): Transformation or sequence of transformation to apply to the labels. Defaults to None.
+        """  
+        
         super().__init__()
         
         # saving the parameters
@@ -34,16 +46,17 @@ class SyntheticChocolateDataset(Dataset):
         background_df = pd.read_csv(original_label_csv)
         background_df = background_df.iloc[self.train_idx].reset_index(drop=True)
         
-        print("Generating the synthetic images in the background directory...")
-        print(f"Using {len(self.train_idx)} as background images")
-        self.synth_csv = generate_synthetic_dataset(per_background, self.background_dir, alpha_reference_dir, self.synth_dir, background_df, noise=True)
+        print(f"Generating {per_background} new images per background. ({len(self.train_idx)} were given. This might take a moment)")
         
+        # Call the generate dataset function which gives us the new csv and saved the images in the synth_dir
+        self.synth_csv = generate_synthetic_dataset(per_background, self.background_dir, alpha_reference_dir, self.synth_dir, background_df, noise=True)
         self.dataset_len = len(self.synth_csv)
 
     def __len__(self):
         return self.dataset_len
 
     def __getitem__(self, idx):
+        # Basically the same as the training dataset
         
         # In case the index is a tensor, we convert it to a list
         if torch.is_tensor(idx):
@@ -51,7 +64,6 @@ class SyntheticChocolateDataset(Dataset):
 
         # Reconstruct the image path with the image ID (/!\ L prefix)
         img_path = Path(f"{self.synth_dir}/L{self.synth_csv.iloc[idx, 0]}.JPG")
-
         image = io.imread(img_path)
         label = self.synth_csv.iloc[idx, 1:] # Skip the image ID
         label = label.astype(int)
