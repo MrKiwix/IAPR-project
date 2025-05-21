@@ -21,15 +21,18 @@ MODEL_PATH = Path("model/best_choco_model.pt")
 TESTING_DATA_PATH = Path("data/test")
 OUTPUT_CSV_PATH = Path("submission.csv")
 CLASS_NAMES = ["Jelly White","Jelly Milk","Jelly Black","Amandina","Crème brulée","Triangolo","Tentation noir","Comtesse","Noblesse","Noir authentique","Passion au lait","Arabia","Stracciatella"]
-IMG_SIZE = (200, 300) # (height, width)
+IMG_SIZE = (120, 180) # (height, width)
 BATCH_SIZE = 32
+
+means =  [0.6887134909629822, 0.666830837726593, 0.6608285307884216]
+stds = [0.15740245580673218, 0.1555258184671402, 0.17858198285102844]
 
 # TRANSFORM DEFINITION
 test_tf = v2.Compose([
     v2.ToImage(),
     v2.ToDtype(torch.float32, scale=True),
     v2.Resize(IMG_SIZE, antialias=True),
-    v2.Normalize(mean=[0.5]*3, std=[0.5]*3),
+    v2.Normalize(mean=means, std=stds),
 ])
 
 if __name__ == "__main__":
