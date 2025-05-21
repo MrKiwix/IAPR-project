@@ -16,7 +16,7 @@ from src.data.TestChocolateDataset import ChocolateTestDataset
 from src.model.ChocoNetwork import ChocoNetwork
 
 # Constants
-MODEL_PATH = Path("model/best_choco_model.pt")
+MODEL_PATH = Path("checkpoint.pt")
 TESTING_DATA_PATH = Path("data/test")
 OUTPUT_CSV_PATH = Path("submission.csv")
 CLASS_NAMES = ["Jelly White","Jelly Milk","Jelly Black","Amandina","Crème brulée","Triangolo","Tentation noir","Comtesse","Noblesse","Noir authentique","Passion au lait","Arabia","Stracciatella"]
