@@ -176,7 +176,7 @@ def generate_synthetic_dataset(img_per_bg, backgrounds_path, transparent_referen
     for i, row in tqdm(background_csv.iterrows(), total=background_csv.shape[0], desc="Generating synthetic images"):
         
         # Load the background image
-        background_name = row[0]
+        background_name = row.values[0]
         background_path = backgrounds_path / ("L" + background_name + ".JPG")
         background = Image.open(background_path).convert("RGB")
     

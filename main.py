@@ -12,7 +12,6 @@ import time
 import torch.nn.functional as F
 
 # Internal modules
-from src.helper import *
 from src.data.TestChocolateDataset import ChocolateTestDataset
 from src.model.ChocoNetwork import ChocoNetwork
 
@@ -75,7 +74,7 @@ if __name__ == "__main__":
             # Add the predictions to the list, cpu() is needed to get it back to the host memory
             hard   = torch.round(F.relu(preds)).int().cpu().numpy()
             # we also want only positive predictions, so we set the negative ones to 0
-            hard[hard < 0] = 0
+            hard[hard < 0] = 0 # kinda redundant since we use relu before, but just in case :)))))
             predictions.extend(hard)
             ids.extend(image_ids)
     
